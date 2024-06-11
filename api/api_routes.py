@@ -132,3 +132,9 @@ async def delete_endpoint(
     if not db_endpoint:
         raise HTTPException(status_code=404, detail="Endpoint not found")
     return {"detail": "Endpoint deleted"}
+
+@router.get("/apis/random", response_model=List[schemas.API])
+async def read_random_apis(db: AsyncSession = Depends(get_db), limit: int = 5):
+    apis = await crud.get_apis(db)
+    random_apis = random.sample(apis, min(len(apis), limit))
+    return random_apis
