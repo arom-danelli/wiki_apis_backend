@@ -24,6 +24,7 @@ async def get_api(db: AsyncSession, api_id: int):
 
     endpoints_result = await db.execute(select(models.Endpoint).filter(models.Endpoint.api_id == api_id))
     endpoints = endpoints_result.scalars().all()
+    endpoints_data = [schemas.Endpoint.from_orm(endpoint) for endpoint in endpoints]
 
     return schemas.API(
         id=api[0].id,
@@ -34,7 +35,7 @@ async def get_api(db: AsyncSession, api_id: int):
         image=api[0].image,
         comments=comments_data,
         likes=int(api[1]),
-        endpoints=[schemas.Endpoint.from_orm(endpoint) for endpoint in endpoints]
+        endpoints=endpoints_data
     )
 
 async def get_apis(db: AsyncSession, skip: int = 0, limit: int = 10):
@@ -48,10 +49,34 @@ async def get_apis(db: AsyncSession, skip: int = 0, limit: int = 10):
     result = await db.execute(stmt)
     apis = result.all()
 
-    return [schemas.API(**api[0].__dict__, likes=int(api[1])) for api in apis]
+    apis_list = []
+    for api in apis:
+        endpoints_result = await db.execute(select(models.Endpoint).filter(models.Endpoint.api_id == api[0].id))
+        endpoints = endpoints_result.scalars().all()
+        endpoints_data = [schemas.Endpoint.from_orm(endpoint) for endpoint in endpoints]
+
+        comments_result = await db.execute(select(models.Comment).filter(models.Comment.api_id == api[0].id))
+        comments = comments_result.scalars().all()
+        comments_data = [schemas.Comment.from_orm(comment) for comment in comments]
+
+        apis_list.append(
+            schemas.API(
+                id=api[0].id,
+                name=api[0].name,
+                description=api[0].description,
+                free=api[0].free,
+                documentation=api[0].documentation,
+                image=api[0].image,
+                comments=comments_data,
+                likes=int(api[1]),
+                endpoints=endpoints_data
+            )
+        )
+
+    return apis_list
 
 async def create_api(db: AsyncSession, api: schemas.APICreate):
-    db_api = models.API(**api.model_dump(exclude={"image", "endpoints"}))
+    db_api = models.API(**api.dict(exclude={"image", "endpoints"}))
 
     if api.image is not None:
         # Handle image storage (implementation not shown)
@@ -123,6 +148,43 @@ async def update_api(db: AsyncSession, api_id: int, api: schemas.APIUpdate):
     )
 
     return updated_api
+
+async def create_endpoint(db: AsyncSession, api_id: int, endpoint: schemas.EndpointCreate):
+    db_endpoint = models.Endpoint(
+        url=endpoint.url,
+        method=endpoint.method,
+        description=endpoint.description,
+        api_id=api_id
+    )
+    db.add(db_endpoint)
+    await db.commit()
+    await db.refresh(db_endpoint)
+    return db_endpoint
+
+async def get_endpoint(db: AsyncSession, endpoint_id: int):
+    return await db.get(models.Endpoint, endpoint_id)
+
+async def update_endpoint(db: AsyncSession, endpoint_id: int, endpoint: schemas.EndpointUpdate):
+    db_endpoint = await db.get(models.Endpoint, endpoint_id)
+    
+    if not db_endpoint:
+        return None
+
+    for key, value in endpoint.dict(exclude_unset=True).items():
+        setattr(db_endpoint, key, value)
+
+    await db.commit()
+    await db.refresh(db_endpoint)
+    return db_endpoint
+
+async def delete_endpoint(db: AsyncSession, endpoint_id: int):
+    db_endpoint = await db.get(models.Endpoint, endpoint_id)
+    
+    if db_endpoint:
+        await db.delete(db_endpoint)
+        await db.commit()
+
+    return db_endpoint
 
 async def delete_api(db: AsyncSession, api_id: int):
     stmt = select(models.API).filter(models.API.id == api_id)

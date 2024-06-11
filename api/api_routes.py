@@ -1,7 +1,8 @@
 # api/api_routes.py
 
+import json
 from typing import List
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, File
+from fastapi import APIRouter, Body, Depends, Form, HTTPException, UploadFile, File
 from sqlalchemy import func, select
 from api.auth import fastapi_users, auth_backend, current_active_user
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,38 +16,23 @@ router = APIRouter()
 
 @router.post("/apis/", response_model=schemas.API)
 async def create_api(
-    name: str = Form(...),
-    description: str = Form(...),
-    free: bool = Form(...),
-    documentation: str = Form(...),
-    endpoints: List[str] = Form(...),
-    methods: List[str] = Form(...),
-    descriptions: List[str] = Form(...),
+    api_data: str = Form(...),
     image: UploadFile = File(None),
     db: AsyncSession = Depends(get_db),
 ):
+    # Parse the JSON data
+    api_dict = json.loads(api_data)
+    api = schemas.APICreate(**api_dict)
+    
     file_location = None
     if image:
         file_location = f"static/images/{image.filename}"
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(image.file, file_object)
+        api.image = file_location
 
-    endpoint_data = [
-        {"url": url, "method": method, "description": description}
-        for url, method, description in zip(endpoints, methods, descriptions)
-    ]
-
-    api = schemas.APICreate(
-        name=name,
-        description=description,
-        free=free,
-        documentation=documentation,
-        image=file_location,
-        endpoints=endpoint_data
-    )
     db_api = await crud.create_api(db=db, api=api)
     return db_api
-
 
 @router.get("/apis/", response_model=List[schemas.API])
 async def read_apis(skip: int = 0, limit: int = 10, db: AsyncSession = Depends(get_db)):
@@ -76,7 +62,11 @@ async def delete_api(api_id: int, db: AsyncSession = Depends(get_db)):
     return {"detail": "API deleted"}
 
 @router.post("/apis/{api_id}/likes/", response_model=schemas.Like)
-async def create_like(api_id: int, db: AsyncSession = Depends(get_db), user: models.User = Depends(current_active_user)):
+async def create_like(
+    api_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: models.User = Depends(current_active_user)
+):
     like = schemas.LikeCreate(api_id=api_id)
     return await crud.create_like(db=db, like=like, user_id=user.id)
 
@@ -100,3 +90,45 @@ async def create_comment(comment: schemas.CommentCreate, db: AsyncSession = Depe
 @router.get("/comments/{api_id}", response_model=List[schemas.Comment])
 async def read_comments(api_id: int, db: AsyncSession = Depends(get_db)):
     return await crud.get_comments(db, api_id=api_id)
+
+@router.post("/apis/{api_id}/endpoints/", response_model=schemas.Endpoint)
+async def create_endpoint(
+    api_id: int,
+    endpoint: schemas.EndpointCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    return await crud.create_endpoint(db=db, api_id=api_id, endpoint=endpoint)
+
+@router.get("/apis/{api_id}/endpoints/{endpoint_id}", response_model=schemas.Endpoint)
+async def read_endpoint(
+    api_id: int,
+    endpoint_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    endpoint = await crud.get_endpoint(db=db, endpoint_id=endpoint_id)
+    if not endpoint:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    return endpoint
+
+@router.put("/apis/{api_id}/endpoints/{endpoint_id}", response_model=schemas.Endpoint)
+async def update_endpoint(
+    api_id: int,
+    endpoint_id: int,
+    endpoint: schemas.EndpointUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    db_endpoint = await crud.update_endpoint(db=db, endpoint_id=endpoint_id, endpoint=endpoint)
+    if not db_endpoint:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    return db_endpoint
+
+@router.delete("/apis/{api_id}/endpoints/{endpoint_id}")
+async def delete_endpoint(
+    api_id: int,
+    endpoint_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    db_endpoint = await crud.delete_endpoint(db=db, endpoint_id=endpoint_id)
+    if not db_endpoint:
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+    return {"detail": "Endpoint deleted"}

@@ -14,6 +14,9 @@ class EndpointBase(BaseModel):
 class EndpointCreate(EndpointBase):
     pass
 
+class EndpointUpdate(EndpointBase):
+    pass
+
 class Endpoint(EndpointBase):
     id: int
 

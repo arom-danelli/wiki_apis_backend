@@ -28,7 +28,9 @@ class Like(Base):
     __tablename__ = "likes"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     api_id = Column(Integer, ForeignKey("apis.id"))
+    user_id = Column(Integer, ForeignKey("users.id")) 
     api = relationship("API", back_populates="likes")
+    user = relationship("User", back_populates="likes")
 
 class Comment(Base):
     __tablename__ = "comments"
@@ -47,3 +49,4 @@ class User(SQLAlchemyBaseUserTable, Base):
     is_active = Column(Boolean, default=True, nullable=False)
     is_superuser = Column(Boolean, default=False, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
+    likes = relationship("Like", back_populates="user") 
