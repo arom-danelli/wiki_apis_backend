@@ -1,6 +1,7 @@
 # api/api_routes.py
 
 import json
+import random
 from typing import List
 from fastapi import APIRouter, Body, Depends, Form, HTTPException, UploadFile, File
 from sqlalchemy import func, select
@@ -136,5 +137,9 @@ async def delete_endpoint(
 @router.get("/apis/random", response_model=List[schemas.API])
 async def read_random_apis(db: AsyncSession = Depends(get_db), limit: int = 5):
     apis = await crud.get_apis(db)
+    if not apis:
+        raise HTTPException(status_code=404, detail="No APIs found")
     random_apis = random.sample(apis, min(len(apis), limit))
+    for api in random_apis:
+        print(f"Random API: {api.id} - {api.name}")  # Log IDs e nomes das APIs
     return random_apis

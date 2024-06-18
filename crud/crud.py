@@ -75,6 +75,7 @@ async def get_apis(db: AsyncSession, skip: int = 0, limit: int = 10):
 
     return apis_list
 
+
 async def create_api(db: AsyncSession, api: schemas.APICreate):
     db_api = models.API(**api.dict(exclude={"image", "endpoints"}))
 
